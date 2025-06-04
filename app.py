@@ -18,28 +18,29 @@ def index():
             error = "Invalid Instagram post URL."
         else:
             shortcode = m.group(1)
+
             # 1) Try the “?__a=1&__d=dis” JSON endpoint
             json_url = f"https://www.instagram.com/p/{shortcode}/?__a=1&__d=dis"
+            media = None
             try:
                 resp = requests.get(
                     json_url,
                     headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                      "Chrome/122.0.0.0 Safari/537.36"
+                        "User-Agent": (
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/122.0.0.0 Safari/537.36"
+                        )
                     },
                     timeout=10
                 )
                 if resp.status_code == 200:
                     data = resp.json()
-                    # Depending on IG version, the path can be either data["graphql"]["shortcode_media"]
-                    # or (older) data["items"][0], but current endpoint uses graphql.
                     media = data.get("graphql", {}).get("shortcode_media", None)
                     if not media:
                         raise Exception("No shortcode_media in JSON response")
                 else:
-                    raise Exception(f"Endpoint returned {resp.status_code}")
-
+                    raise Exception(f"Endpoint returned status {resp.status_code}")
             except Exception:
                 # 2) Fallback: fetch the HTML & parse out __NEXT_DATA__
                 post_url = f"https://www.instagram.com/p/{shortcode}/"
@@ -47,9 +48,11 @@ def index():
                     page = requests.get(
                         post_url,
                         headers={
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                          "Chrome/122.0.0.0 Safari/537.36"
+                            "User-Agent": (
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                "Chrome/122.0.0.0 Safari/537.36"
+                            )
                         },
                         timeout=10
                     )
@@ -57,21 +60,18 @@ def index():
                         raise Exception(f"Status {page.status_code}")
                     html = page.text
 
-                    # Look for <script id="__NEXT_DATA__">…</script>
                     next_data_match = re.search(
                         r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>\s*(\{.*?\})\s*</script>',
                         html,
                         re.DOTALL
                     )
                     if not next_data_match:
-                        raise Exception("Could not find __NEXT_DATA__ paragraph")
+                        raise Exception("Could not find __NEXT_DATA__ in HTML")
 
                     next_data = json.loads(next_data_match.group(1))
-                    # Navigate to graphql → shortcode_media
                     media = next_data["props"]["pageProps"]["graphql"]["shortcode_media"]
                 except Exception as e:
                     error = f"Failed to load post: {e}"
-                    media = None
 
             # If we have a valid media dict, extract URLs
             if media and not error:
@@ -88,4 +88,5 @@ def index():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port, debug=False)
