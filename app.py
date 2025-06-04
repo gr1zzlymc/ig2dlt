@@ -1,21 +1,11 @@
 import os
 import re
+import json
 from flask import Flask, render_template, request
 
-import instaloader
-from instaloader import Post
+import requests
 
 app = Flask(__name__)
-
-# Initialize Instaloader once
-L = instaloader.Instaloader(
-    download_pictures=False,
-    download_videos=False,
-    download_video_thumbnails=False,
-    download_comments=False,
-    save_metadata=False,
-    post_metadata_txt_pattern="",
-)
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -24,28 +14,57 @@ def index():
 
     if request.method == "POST":
         url = request.form.get("url", "").strip()
-        # Basic regex to pull out the shortcode from an Instagram post URL
+        # Extract shortcode from URL
         m = re.search(r"instagram\.com\/p\/([^\/]+)/", url)
         if not m:
             error = "Invalid Instagram post URL."
         else:
             shortcode = m.group(1)
-            try:
-                # Fetch Post object via shortcode
-                post = Post.from_shortcode(L.context, shortcode)
+            post_url = f"https://www.instagram.com/p/{shortcode}/"
 
-                # If it's a carousel (multiple images/videos), get all display URLs
-                if post.typename == "GraphSidecar":
-                    images = [node.display_url for node in post.get_sidecar_nodes()]
+            try:
+                # Fetch the page HTML (pretend to be a browser)
+                resp = requests.get(
+                    post_url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                      "Chrome/122.0.0.0 Safari/537.36"
+                    },
+                    timeout=10
+                )
+                if resp.status_code != 200:
+                    raise Exception(f"Status {resp.status_code}")
+
+                html = resp.text
+
+                # Find the `window._sharedData = {...};` blob
+                shared_data_match = re.search(
+                    r"window\._sharedData = (.*?);\s*</script>",
+                    html
+                )
+                if not shared_data_match:
+                    raise Exception("Could not find sharedData in HTML")
+
+                shared_data = json.loads(shared_data_match.group(1))
+                media = shared_data["entry_data"]["PostPage"][0]["graphql"]["shortcode_media"]
+
+                # If it's a carousel (multiple images/videos)
+                if media.get("__typename") == "GraphSidecar":
+                    images = [
+                        node["node"]["display_url"]
+                        for node in media["edge_sidecar_to_children"]["edges"]
+                    ]
                 else:
-                    # Single‐media post → use post.url
-                    images = [post.url]
+                    # Single‐media post (image/video)
+                    images = [media["display_url"]]
+
             except Exception as e:
-                error = f"Failed to load: {e}"
+                error = f"Failed to load post: {e}"
 
     return render_template("index.html", images=images, error=error)
 
-# If running locally with `python app.py`
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=False)
