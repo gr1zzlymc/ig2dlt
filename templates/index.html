@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instagram Post Viewer</title>
+    <style>
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            background-color: #fafafa;
+            margin: 0; padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 2rem auto;
+            background: #fff;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+        input[type="text"] {
+            padding: 0.5rem;
+            font-size: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 0.75rem;
+        }
+        button {
+            padding: 0.6rem 1rem;
+            font-size: 1rem;
+            background-color: #3897f0;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            align-self: flex-end;
+        }
+        button:hover {
+            background-color: #2d81c9;
+        }
+        .error {
+            color: #e0245e;
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+        .images {
+            margin-top: 1.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 0.75rem;
+        }
+        .images img {
+            width: 100%;
+            border-radius: 4px;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Instagram Post Viewer</h1>
+        <form method="POST" action="/">
+            <input
+                type="text"
+                name="url"
+                placeholder="Enter Instagram post URL"
+                required
+            />
+            <button type="submit">Fetch Photos</button>
+        </form>
+
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+
+        {% if images %}
+            <div class="images">
+                {% for img_url in images %}
+                    <img src="{{ img_url }}" alt="Instagram photo" />
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
