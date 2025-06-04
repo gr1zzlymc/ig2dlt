@@ -2,7 +2,6 @@ import os
 import re
 import json
 from flask import Flask, render_template, request
-
 import requests
 
 app = Flask(__name__)
@@ -14,7 +13,6 @@ def index():
 
     if request.method == "POST":
         url = request.form.get("url", "").strip()
-        # Extract shortcode from URL
         m = re.search(r"instagram\.com\/p\/([^\/]+)/", url)
         if not m:
             error = "Invalid Instagram post URL."
@@ -23,7 +21,7 @@ def index():
             post_url = f"https://www.instagram.com/p/{shortcode}/"
 
             try:
-                # Fetch the page HTML (pretend to be a browser)
+                # Fetch the page HTML as a regular browser would
                 resp = requests.get(
                     post_url,
                     headers={
@@ -38,25 +36,34 @@ def index():
 
                 html = resp.text
 
-                # Find the `window._sharedData = {...};` blob
+                # 1) Try the old sharedData approach
                 shared_data_match = re.search(
                     r"window\._sharedData = (.*?);\s*</script>",
                     html
                 )
-                if not shared_data_match:
-                    raise Exception("Could not find sharedData in HTML")
+                if shared_data_match:
+                    shared_data = json.loads(shared_data_match.group(1))
+                    media = shared_data["entry_data"]["PostPage"][0]["graphql"]["shortcode_media"]
+                else:
+                    # 2) Fallback: Next.js approach (newer Instagram versions)
+                    next_data_match = re.search(
+                        r'<script type="application/json" id="__NEXT_DATA__">(.+?)</script>',
+                        html
+                    )
+                    if not next_data_match:
+                        raise Exception("Could not find sharedData or __NEXT_DATA__ in HTML")
 
-                shared_data = json.loads(shared_data_match.group(1))
-                media = shared_data["entry_data"]["PostPage"][0]["graphql"]["shortcode_media"]
+                    next_data = json.loads(next_data_match.group(1))
+                    # Dig into the JSON path: props → pageProps → graphql → shortcode_media
+                    media = next_data["props"]["pageProps"]["graphql"]["shortcode_media"]
 
-                # If it's a carousel (multiple images/videos)
+                # Now media is the “shortcode_media” object
                 if media.get("__typename") == "GraphSidecar":
                     images = [
                         node["node"]["display_url"]
                         for node in media["edge_sidecar_to_children"]["edges"]
                     ]
                 else:
-                    # Single‐media post (image/video)
                     images = [media["display_url"]]
 
             except Exception as e:
